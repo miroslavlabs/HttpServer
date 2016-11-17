@@ -65,7 +65,6 @@ int fileExists(const char *filename)
 int sendHttpResponse(__in HttpRequest *httpRequest,
 					 __in SOCKET *ClientSocket) {
 	HttpResponse httpResponse;
-	HttpHeaders *headers;
 	char *response_header = NULL, *response_body = NULL, *sendbuf = NULL;
 	int iSendResult, result;
 	int sendbuf_size;
@@ -74,19 +73,23 @@ int sendHttpResponse(__in HttpRequest *httpRequest,
 
 	initStatusCodes();
 	result = EXIT_OK;
-	headers = (HttpHeaders *) malloc(sizeof(HttpHeaders));
+
+	httpResponse.body = NULL;
+	httpResponse.headers = NULL;
+	httpResponse.httpVersion = NULL;
+	httpResponse.status = NULL;
 
 	if(httpRequest->requestLine->method == UNKNOWN_METHOD) {
 		provideUnknown(httpRequest, &httpResponse);
 	} else {
 		if(httpRequest->requestLine->method == GET) {
 			provideGet(httpRequest, &httpResponse);
-			
 		} else if (httpRequest->requestLine->method == HEAD) {
 			provideHead(httpRequest, &httpResponse);
-
 		} else if (httpRequest->requestLine->method == POST) {
 			providePost(httpRequest, &httpResponse);
+		} else if(httpRequest->requestLine->method == OPTIONS) {
+			provideOptions(httpRequest, &httpResponse);
 		}
 	}
 	sendbuf = createHttpResponseHeader(&httpResponse, httpRequest, &sendbuf_size);
@@ -179,8 +182,6 @@ void provideUnknown(__in HttpRequest *httpRequest,
 				 __out HttpResponse *httpResponse) {
 	httpResponse->httpVersion = httpRequest->requestLine->httpVersion;
 	httpResponse->status = &StatusCodesTable.NotImplemented;
-	httpResponse->headers = NULL;
-	httpResponse->body = NULL;
 }
 
 void provideHead(__in HttpRequest *httpRequest,
@@ -189,7 +190,6 @@ void provideHead(__in HttpRequest *httpRequest,
 	FILE *fd = NULL;
 
 	httpResponse->httpVersion = httpRequest->requestLine->httpVersion;
-	httpResponse->body = NULL;
 	
 	fd = fopen(httpRequest->requestLine->requestURI, "r");
 	// If the file cannot be open, then the resource doesn't exist.
@@ -233,7 +233,6 @@ void providePost(__in HttpRequest *httpRequest,
 	FILE *fd = NULL;
     int result;
 	
-	httpResponse->body = NULL;
 	// When POST is recieved, it is necessary to verify the the Content-Length header was
 	// provided and to verify wether it has length that differs from zero.
 	if(httpRequest->headers->contentLength == ZERO_CONTENT_LENGTH) {
@@ -261,4 +260,18 @@ void providePost(__in HttpRequest *httpRequest,
 			httpResponse->status = &StatusCodesTable.NotFound;
 		}
 	}
+}
+
+void provideOptions(__in HttpRequest *httpRequest,
+				 __out HttpResponse *httpResponse) {
+	// Options will return only the supported HHTP methods and supported MIME types.
+	httpResponse->status = &StatusCodesTable.OK;
+
+	httpResponse->body = "This server supports the following methods: HEAD, GET, PUT, OPTIONS.\n" \
+		"The following MIME types are supported: text/html, text/plain";
+
+	httpResponse->headers = (HttpHeaders *) malloc(sizeof(HttpHeaders));
+	httpResponse->headers->contentType = "text/plain";
+	httpResponse->headers->charset = "UTF-8";
+	httpResponse->headers->contentLength = strlen(httpResponse->body);
 }
