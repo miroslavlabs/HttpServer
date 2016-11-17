@@ -13,9 +13,6 @@
 #include "HTTPResponse.h"
 #include "HTTPCommons.h"
 
-// FIXME
-#include <time.h>
-
 // Need to link with Ws2_32.lib
 #pragma comment (lib, "Ws2_32.lib")
 
@@ -23,10 +20,15 @@
 #define DEFAULT_PORT "8888"
 #define SLEEP_TIME 1000
 
-void acquireHttpRequest(HttpRequest *httpRequest, SOCKET ListenSocket, SOCKET ClientSocket);
+void acquireHttpRequest(SOCKET ListenSocket, SOCKET ClientSocket);
+
 int main(void) {
     WSADATA wsaData;
-    int iResult, iSendResult;
+    int iResult;
+	int errorCode;
+	u_long availableBytes;
+	fd_set set;
+	struct timeval tm;
 
     SOCKET ListenSocket = INVALID_SOCKET;
     SOCKET ClientSocket = INVALID_SOCKET;
@@ -35,10 +37,9 @@ int main(void) {
     struct addrinfo *result = NULL;
     struct addrinfo hints;
 
-	// Http Request and response data
-	HttpRequest httpRequest;
-
-	u_long iMode;
+    int iSendResult;
+    char recvbuf[DEFAULT_BUFLEN];
+    int recvbuflen = DEFAULT_BUFLEN;
     
     // Initialize Winsock
     iResult = WSAStartup(MAKEWORD(2,2), &wsaData);
@@ -90,6 +91,8 @@ int main(void) {
         return EXIT_ERROR;
     }
 
+	tm.tv_sec = 1;
+	tm.tv_usec = 0;
 	// Keep the server running.
 	while(1) {
 		// Accept a client socket
@@ -97,24 +100,17 @@ int main(void) {
 		if (ClientSocket == INVALID_SOCKET) {
 			printf("accept failed with error: %d\n", WSAGetLastError());
 			closesocket(ListenSocket);
-			//continue;
-		}
-		// Nonblocking socket
-		iMode=1;
-		ioctlsocket(ClientSocket,FIONBIO,&iMode);
+			WSACleanup();
+			return EXIT_ERROR;
+		}// Receive until the peer shuts down the connection
 
-		acquireHttpRequest(&httpRequest, ListenSocket, ClientSocket);
-		
-		sendHttpResponse(httpRequest, ClientSocket);
-		
+		acquireHttpRequest(ListenSocket, ClientSocket);
+
 		printf("Connection closing...\n");
 		iResult = shutdown(ClientSocket, SD_SEND);
 		if (iResult == SOCKET_ERROR) {
 			printf("shutdown failed with error: %d\n", WSAGetLastError());
 		}
-		closesocket(ClientSocket);
-
-		freeHttpRequest(&httpRequest);
 	}
     
     // shutdown the connection since we're done
@@ -132,36 +128,62 @@ int main(void) {
     return EXIT_OK;
 }
 
-void acquireHttpRequest(HttpRequest *httpRequest, SOCKET ListenSocket, SOCKET ClientSocket) {
+void acquireHttpRequest(SOCKET ListenSocket, SOCKET ClientSocket) {
 	int iSendResult, iResult, msgLen, errorCode;
 	char recvbuf[DEFAULT_BUFLEN], msgbuf[MAX_BUFF_LEN];
 	int recvbuflen = DEFAULT_BUFLEN, msgbuflen = 0;
 	BOOL dataRecieved = FALSE;
+	HttpRequest *httpRequest;
+
+	u_long availableBytes;
+	fd_set set;
+	struct timeval tm;
+	tm.tv_sec = 2;
+	tm.tv_usec = 0;
+
 	// Initialize the structure with NULL values.
+	httpRequest = (HttpRequest*)malloc(sizeof(HttpRequest));
 	httpRequest->requestLine = NULL;
 	httpRequest->headers = NULL;
 	httpRequest->entityBody = NULL;
 	
-	iResult = iSendResult = -1;
-	
+	iSendResult = -1;
+
+	FD_ZERO(&set);
+	FD_SET(ClientSocket, &set);
+	memset(&msgbuf, 0, MAX_BUFF_LEN);
+	msgbuflen = 0;
 	do {
-		Sleep(SLEEP_TIME);
-		ZeroMemory(recvbuf, recvbuflen);
+		select(0, &set, NULL, NULL, &tm);
+		// FIXME - catch error
+		if (ioctlsocket(ClientSocket,FIONREAD,&availableBytes) < 0) break;
+		printf("\npending = %ld\n", availableBytes);
+		if (availableBytes == 0) {
+			break;
+		}
+		ZeroMemory(&recvbuf, sizeof(DEFAULT_BUFLEN));
 		msgLen = recv(ClientSocket, recvbuf, recvbuflen, 0);
-		if(msgLen == SOCKET_ERROR) {
-			errorCode = WSAGetLastError();
-			if(errorCode != WSAEWOULDBLOCK) {
-				printf("recv failed with error: %d\n", errorCode);
-				break;
-			}
-		} else {
+		if (msgLen > 0) {
+			recvbuf[msgLen] = '\0';				
 			memcpy(msgbuf + msgbuflen, recvbuf, msgLen);
 			msgbuflen += msgLen;
+		} else if(msgLen == SOCKET_ERROR) {
+			errorCode = WSAGetLastError();				
+			printf("recv failed with error: %d\n", errorCode);
+			closesocket(ClientSocket);
+			WSACleanup();
+			break;
 		}
-	} while(msgLen > 0);
+	} while(1);
 	
-	msgbuf[msgbuflen] = '\0';
-	*httpRequest = parseHttpMessage(msgbuf, msgbuflen);
-	printf("Request:\n%s\n", msgbuf);
-	printf("Bytes received: %d\n", msgbuflen);
+	if (msgbuflen > 0) {
+		msgbuf[msgbuflen] = '\0';
+		*httpRequest = parseHttpMessage(msgbuf, msgbuflen);
+		printf("Request:\n%s\n", msgbuf);
+		printf("Bytes received: %d\n", msgbuflen);
+
+		sendHttpResponse(httpRequest, &ClientSocket);
+		freeHttpRequest(httpRequest);
+		free(httpRequest);
+	}
 }

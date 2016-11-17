@@ -4,6 +4,7 @@
 #include <Windows.h>
 #include "HTTPCommons.h"
 #include "HTTPRequest.h"
+#include <stdio.h>
 
 typedef struct __status {
 	char *statusCode;
@@ -28,12 +29,38 @@ typedef struct __http_response {
 	char *httpVersion;
 	Status *status;
 	HttpHeaders *headers;
+	char *body;
 } HttpResponse;
 
 void initStatusCodes();
 
-int sendHttpResponse(HttpRequest httpRequest, SOCKET ClientSocket);
-char *createHttpResponseHeader(HttpResponse httpResponse, HttpRequest httpRequest);
-void createHttpResponseHeaderStatusLine(HttpResponse httpResponse, HttpRequest httpRequest, char *headbuf, int *length);
+char *provideFileContents(__in FILE *fp);
+
+int sendHttpResponse(__in HttpRequest *httpRequest,
+					 __in SOCKET *ClientSocket);
+
+char *createHttpResponseHeader(__in HttpResponse *httpResponse,
+							   __in HttpRequest *httpRequest,
+							   __out int *size);
+
+void createHttpResponseHeaderStatusLine(__in HttpResponse *httpResponse, 
+										__in HttpRequest *httpRequest, 
+										__in char *headbuf,
+										__out int *length);
+
+void provideUnknown(__in HttpRequest *httpRequest,
+				 __out HttpResponse *httpResponse);
+
+void provideHead(__in HttpRequest *httpRequest,
+				 __out HttpResponse *httpResponse);
+
+void provideGet(__in HttpRequest *httpRequest,
+				__out HttpResponse *httpResponse);
+
+void providePost(__in HttpRequest *httpRequest,
+				 __out HttpResponse *httpResponse);
+
+void provideOptions(__in HttpRequest *httpRequest,
+				 __out HttpResponse *httpResponse);
 
 #endif

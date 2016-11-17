@@ -88,6 +88,9 @@
   <ItemGroup>
     <Text Include="store.txt" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="page.html" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

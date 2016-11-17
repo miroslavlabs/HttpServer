@@ -29,145 +29,236 @@ void initStatusCodes() {
 	StatusCodesTable.NotImplemented.reasonPhrase = "Not Implemented";
 }
 
-int sendHttpResponse(HttpRequest httpRequest, SOCKET ClientSocket) {
+char* provideFileContents(__in FILE *fp) {	
+	long file_size;
+	char *buffer;
+
+	// First, the file size needs to be discovered.
+	// To do that we seek the end of the file and then we rewind the
+	// file pointer to point to the beginning of the file again.
+	fseek(fp , 0L , SEEK_END);
+	file_size = ftell(fp);
+	rewind(fp);
+
+	// Allocate memory for entire content.
+	buffer = (char*)calloc(file_size + 1, sizeof(char));
+	if(!buffer) {
+		return NULL;
+	}
+
+	// Copy the file into the bufffer.
+	fread(buffer , file_size, 1 , fp);
+
+	buffer[file_size] = '\0';
+
+	// FIXME - make a valid status code.
+	return buffer;
+}
+
+int fileExists(const char *filename)
+{
+   FILE *fp = fopen (filename, "r");
+   if (fp!=NULL) fclose (fp);
+   return (fp!=NULL);
+}
+
+int sendHttpResponse(__in HttpRequest *httpRequest,
+					 __in SOCKET *ClientSocket) {
 	HttpResponse httpResponse;
 	HttpHeaders *headers;
-	char *sendbuf = NULL;
-	int sendbuflen, iSendResult, result;
+	char *response_header = NULL, *response_body = NULL, *sendbuf = NULL;
+	int iSendResult, result;
+	int sendbuf_size;
 	
 	FILE *fd = NULL;
-	FILE *fp;
 
 	initStatusCodes();
 	result = EXIT_OK;
-
-	httpResponse.httpVersion = httpRequest.requestLine->httpVersion;
 	headers = (HttpHeaders *) malloc(sizeof(HttpHeaders));
-	httpResponse.headers = headers;
-	// Stick to the header information from the request or return default
-	// information in case the specified headers were not set in the request.
-	headers->contentType = httpRequest.headers->contentType == NULL ? "text/plain" : httpRequest.headers->contentType;
-	headers->charset = httpRequest.headers->charset  == NULL ? "UTF-8" : httpRequest.headers->charset;
-	headers->contentLength = NO_CONTENT;
 
-	if(httpRequest.requestLine->method == UNKNOWN_METHOD) {
-		httpResponse.status = &StatusCodesTable.NotImplemented;
+	if(httpRequest->requestLine->method == UNKNOWN_METHOD) {
+		provideUnknown(httpRequest, &httpResponse);
 	} else {
-		// Open both for reading and for writing.
-		fd = fopen(httpRequest.requestLine->requestURI, "a+");
-		// If the file cannot be open, then the resource doesn't exist.
-		if(fd <= 0) {
-			httpResponse.status = &StatusCodesTable.NotFound;
-		} else {
-			// If the method is understood as a GET or HEAD, then the status code will be set as OK.
-			if(httpRequest.requestLine->method == GET || httpRequest.requestLine->method == HEAD) {
-				httpResponse.status = &StatusCodesTable.OK;
-				// Since GET/HEAD weill be returning a resource or info about the resource,
-				// acquire the length of that resource.
-				fseek(fd, 0L, SEEK_END);
-				headers->contentLength = ftell(fd);
-				fseek(fd, 0L, SEEK_SET);
-			} else if(httpRequest.requestLine->method == POST) {
-				// When POST is recieved, it is necessary to verify the the Content-Length header was
-				// provided and to verify wether it has length that differs from zero.
-				if(httpRequest.headers->contentLength == NO_CONTENT) {
-					httpResponse.status = &StatusCodesTable.NoContent;
-				} else if(httpRequest.headers->contentLength == NO_CONTENT_LENGTH) {
-					httpResponse.status = &StatusCodesTable.BadRequest;
-				} else if(httpRequest.headers->contentType == NULL) {
-					// if the content type is missing, the server cannot return the
-					// data in a format that will be understood by the client.
-					httpResponse.status = &StatusCodesTable.BadRequest;
-				} else {
-					// The first time we process the POST request, we have not yet written
-					// anything to the file. For now, we assume that all is correct.
-					httpResponse.status = &StatusCodesTable.OK;
-				}
-			}
+		if(httpRequest->requestLine->method == GET) {
+			provideGet(httpRequest, &httpResponse);
+			
+		} else if (httpRequest->requestLine->method == HEAD) {
+			provideHead(httpRequest, &httpResponse);
+
+		} else if (httpRequest->requestLine->method == POST) {
+			providePost(httpRequest, &httpResponse);
 		}
 	}
-	
-	// Get the header and then send it to the client.
-	sendbuf = createHttpResponseHeader(httpResponse, httpRequest);
-	 
-	// Return the header part to the client.
-	iSendResult = send( ClientSocket, sendbuf, strlen(sendbuf), 0);
+	sendbuf = createHttpResponseHeader(&httpResponse, httpRequest, &sendbuf_size);
+	printf("%s\n", sendbuf);
+	iSendResult = send(*ClientSocket, sendbuf, sendbuf_size, 0);
 	if (iSendResult == SOCKET_ERROR) {
 		printf("send failed with error: %d\n", WSAGetLastError());
-		result = EXIT_ERROR;
-		goto CleanUp;
+		closesocket(*ClientSocket);
+		WSACleanup();
+		return EXIT_ERROR;
 	}
 
-	if(fd > 0) {
-		// Return the requested resource when the GET method is used.
-		if(httpRequest.requestLine->method == GET) {
-			while(fgets(sendbuf, DEFAULT_BUFLEN, fd)) {
-				iSendResult = send( ClientSocket, sendbuf, strlen(sendbuf), 0);
-				if (iSendResult == SOCKET_ERROR) {
-					printf("send failed with error: %d\n", WSAGetLastError());
-					break;
-				}
-			}
-		} else if(httpRequest.requestLine->method == POST) {
-			// Place the data sent over in the file.
-			fputs(httpRequest.entityBody, fd);
-		}
-	}
-
-	printf("Bytes sent: %d\n", iSendResult);
-
-CleanUp:
-	// Close the file.
-	if(fd > 0) {
-		fclose(fd);
-	}
-
-	free(headers);
+	//Free the used resources.
 	free(sendbuf);
+
+	if(httpResponse.body != NULL) {
+		free(httpResponse.headers);
+	}
 
 	return result;
 }
 
-char *createHttpResponseHeader(HttpResponse httpResponse, HttpRequest httpRequest) {
-	char *headbuf = NULL;
-	int headbuflen;
-
+char *createHttpResponseHeader(__in HttpResponse *httpResponse,
+							   __in HttpRequest *httpRequest,
+							   __out int *size) {
+	char *headbuf = NULL, *temp = NULL;
+	int templen;
+	
 	headbuf = (char *) malloc(DEFAULT_BUFLEN * sizeof(char));
 
 	// Create the status line of the response
-	createHttpResponseHeaderStatusLine(httpResponse, httpRequest, headbuf, &headbuflen);
-	sprintf(headbuf + headbuflen + 1, "Content-Type: %s;charset=%s\r\nContent-Length: %d\r\n\r\n\0", 
-		httpResponse.headers->contentType, httpResponse.headers->charset, httpResponse.headers->contentLength);
+	createHttpResponseHeaderStatusLine(httpResponse, httpRequest, headbuf, size);
+	if (httpResponse->body != NULL) {
+		sprintf(headbuf + *size, "Content-Type: %s;charset=%s\r\nContent-Length: %d\r\nConnection: close\r\n\r\n", 
+			httpResponse->headers->contentType, httpResponse->headers->charset, httpResponse->headers->contentLength);
+
+		// new code
+		*size = strlen(headbuf);
+		templen = *size + httpResponse->headers->contentLength;
+		temp = (char*) malloc(templen*sizeof(char*));
+		memcpy(temp, headbuf, *size);
+		memcpy(temp + *size, httpResponse->body, httpResponse->headers->contentLength);
+		free(headbuf);
+		headbuf = temp;
+		*size = templen;
+	} else {
+		headbuf[(*size)++] = CR;
+		headbuf[(*size)++] = LF;
+		headbuf[*size] = '\0';
+	}
 
 	return headbuf;
 }
 
-void createHttpResponseHeaderStatusLine(HttpResponse httpResponse, HttpRequest httpRequest, char *headbuf, int *length) {
+void createHttpResponseHeaderStatusLine(__in HttpResponse *httpResponse, 
+										__in HttpRequest *httpRequest, 
+										__in char *headbuf,
+										__out int *length) {
 	int headbuflen, itemLength;
 	headbuflen = 0;
 
 	//Add the HTTP version field.
-	itemLength = strlen(httpRequest.requestLine->httpVersion);
-	memcpy(headbuf, httpRequest.requestLine->httpVersion, itemLength);
+	itemLength = strlen(httpRequest->requestLine->httpVersion);
+	memcpy(headbuf, httpRequest->requestLine->httpVersion, itemLength);
 
 	headbuflen += itemLength;
 	headbuf[headbuflen] = SP;
 	headbuflen++;
 
 	// Add the Status Code.
-	itemLength = strlen(httpResponse.status->statusCode);
-	memcpy(headbuf + headbuflen, httpResponse.status->statusCode, itemLength);
+	itemLength = strlen(httpResponse->status->statusCode);
+	memcpy(headbuf + headbuflen, httpResponse->status->statusCode, itemLength);
 
 	headbuflen += itemLength;
 	headbuf[headbuflen] = SP;
 	headbuflen++;
 
 	// Add the reason phrase.
-	itemLength = strlen(httpResponse.status->reasonPhrase);
-	memcpy(headbuf + headbuflen, httpResponse.status->reasonPhrase, itemLength);
+	itemLength = strlen(httpResponse->status->reasonPhrase);
+	memcpy(headbuf + headbuflen, httpResponse->status->reasonPhrase, itemLength);
 	headbuflen += itemLength;
 	headbuf[headbuflen++] = CR;
-	headbuf[headbuflen] = LF;
+	headbuf[headbuflen++] = LF;
+	headbuf[headbuflen] = '\0';
 	
 	*length = headbuflen;
+}
+
+void provideUnknown(__in HttpRequest *httpRequest,
+				 __out HttpResponse *httpResponse) {
+	httpResponse->httpVersion = httpRequest->requestLine->httpVersion;
+	httpResponse->status = &StatusCodesTable.NotImplemented;
+	httpResponse->headers = NULL;
+	httpResponse->body = NULL;
+}
+
+void provideHead(__in HttpRequest *httpRequest,
+				 __out HttpResponse *httpResponse) {
+
+	FILE *fd = NULL;
+
+	httpResponse->httpVersion = httpRequest->requestLine->httpVersion;
+	httpResponse->body = NULL;
+	
+	fd = fopen(httpRequest->requestLine->requestURI, "r");
+	// If the file cannot be open, then the resource doesn't exist.
+	if(!fd) {
+		// If the file doesn't exist, send no headers - just the status line.
+		httpResponse->status = &StatusCodesTable.NotFound;
+	} else {
+		httpResponse->status = &StatusCodesTable.OK;
+		httpResponse->body = EMPTY_STRING;
+		httpResponse->headers = (HttpHeaders *) malloc(sizeof(HttpHeaders));
+		// Stick to the header information from the request or return default
+		// information in case the specified headers were not set in the request.
+		httpResponse->headers->contentType = httpRequest->headers->contentType == NULL ? "text/html" : httpRequest->headers->contentType;
+		httpResponse->headers->charset = httpRequest->headers->charset  == NULL ? "UTF-8" : httpRequest->headers->charset;
+
+		fseek(fd, 0L, SEEK_END);
+		httpResponse->headers->contentLength = ftell(fd);
+	}
+
+	if(fd) {
+		fclose(fd);
+	}
+}
+
+void provideGet(__in HttpRequest *httpRequest,
+				 __out HttpResponse *httpResponse) {
+	FILE *fd = NULL;
+	provideHead(httpRequest, httpResponse);
+	if(httpResponse->status->statusCode != StatusCodesTable.NotFound.statusCode) {
+		fd = fopen(httpRequest->requestLine->requestURI, "r");
+		if (fd) {
+			httpResponse->body = provideFileContents(fd);
+			fclose(fd);
+		}
+	}
+}
+
+void providePost(__in HttpRequest *httpRequest,
+				 __out HttpResponse *httpResponse) {
+	
+	FILE *fd = NULL;
+    int result;
+	
+	httpResponse->body = NULL;
+	// When POST is recieved, it is necessary to verify the the Content-Length header was
+	// provided and to verify wether it has length that differs from zero.
+	if(httpRequest->headers->contentLength == ZERO_CONTENT_LENGTH) {
+		httpResponse->status = &StatusCodesTable.NoContent;
+	
+	} else if(httpRequest->headers->contentLength == MISSING_CONTENT_LENGTH) {
+		httpResponse->status = &StatusCodesTable.BadRequest;
+	
+	} else if(httpRequest->headers->contentType == NULL) {
+		// if the content type is missing, the server cannot return the
+		// data in a format that will be understood by the client.
+		httpResponse->status = &StatusCodesTable.BadRequest;
+	
+	} else {
+		// The first time we process the POST request, we have not yet written
+		// anything to the file. For now, we assume that all is correct.
+		if(fileExists(httpRequest->requestLine->requestURI)) {
+			httpResponse->status = &StatusCodesTable.OK;
+			fd = fopen(httpRequest->requestLine->requestURI, "a");
+			if (fd) {
+				fputs(httpRequest->entityBody, fd);
+				fclose(fd);
+			}
+		} else {
+			httpResponse->status = &StatusCodesTable.NotFound;
+		}
+	}
 }

@@ -9,10 +9,15 @@ HttpRequest parseHttpMessage(
 	int currentParsingPos;
 
 	httpRequest.requestLine = parseHttpStatusLine(msgbuf, msglen, &currentParsingPos);
-	httpRequest.headers = parseHttpHeaders(msgbuf, msglen, &currentParsingPos);
-	currentParsingPos++;
-	httpRequest.entityBody = acquireSubstring(msgbuf, currentParsingPos, msglen);
-	httpRequest.entityBody[msglen - 1] = '\0';
+	if(httpRequest.requestLine->method != UNKNOWN_METHOD) {
+		httpRequest.headers = parseHttpHeaders(msgbuf, msglen, &currentParsingPos);
+		currentParsingPos++;
+		httpRequest.entityBody = acquireSubstring(msgbuf, currentParsingPos, msglen);
+		httpRequest.entityBody[msglen - 1] = '\0';
+	} else {
+		httpRequest.headers = NULL;
+		httpRequest.entityBody = NULL;
+	}
 
 	return httpRequest;
 }
@@ -43,9 +48,10 @@ HttpRequestLine* parseHttpStatusLine(
 		requestLine->method = GET;
 	} else if(strcmp(method, "POST") == 0) {
 		requestLine->method = POST;
+	} else if(strcmp(method, "OPTIONS") == 0) {
+		requestLine->method = OPTIONS;
 	} else {
 		requestLine->method = UNKNOWN_METHOD;
-		goto ParsingDone;
 	}
 
 	// Remember the new starting position for the next item to be parsed.
@@ -68,7 +74,6 @@ HttpRequestLine* parseHttpStatusLine(
 	// The length of the status line includes LF as well.
 	*currentParsingPos = i + 1;
 
-ParsingDone:
 	free(method);
 
 	return requestLine;
@@ -87,7 +92,7 @@ HttpHeaders* parseHttpHeaders(
 	// values.
 	httpHeaders = (HttpHeaders *) malloc(sizeof(HttpHeaders));
 	httpHeaders->contentType = NULL;
-	httpHeaders->contentLength = NO_CONTENT_LENGTH;
+	httpHeaders->contentLength = MISSING_CONTENT_LENGTH;
 	httpHeaders->charset = NULL;
 
 	// Using the start address of the headers to make the
@@ -167,9 +172,11 @@ void freeHttpRequest(
 	free(httpRequest->requestLine->httpVersion);
 	free(httpRequest->requestLine->requestURI);
 
-	if(httpRequest->headers->contentType != NULL)
-		free(httpRequest->headers->contentType);
+	if(httpRequest->headers != NULL) {
+		if(httpRequest->headers->contentType != NULL)
+			free(httpRequest->headers->contentType);
 
-	if(httpRequest->headers->charset != NULL)
-		free(httpRequest->headers->charset);
+		if(httpRequest->headers->charset != NULL)
+			free(httpRequest->headers->charset);
+	}
 }

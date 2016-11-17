@@ -4,8 +4,8 @@
 #include <Windows.h>
 #include "HTTPCommons.h"
 
-#define NO_CONTENT 0
-#define NO_CONTENT_LENGTH -1
+#define ZERO_CONTENT_LENGTH 0
+#define MISSING_CONTENT_LENGTH -1
 
 typedef struct __http_request_line {
 	enum HTTPMETHOD method;
