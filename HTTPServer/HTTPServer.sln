@@ -1,0 +1,26 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 2012
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "BasicTcpServer", "BasicTcpServer\BasicTcpServer.vcxproj", "{13510C1E-5875-476B-8F11-B6002428CA87}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "HttpSimpleServer", "HttpSimpleServer\HttpSimpleServer.vcxproj", "{CBA89FD4-01AF-4A76-A476-645BCE5EBA5A}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Win32 = Debug|Win32
+		Release|Win32 = Release|Win32
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{13510C1E-5875-476B-8F11-B6002428CA87}.Debug|Win32.ActiveCfg = Debug|Win32
+		{13510C1E-5875-476B-8F11-B6002428CA87}.Debug|Win32.Build.0 = Debug|Win32
+		{13510C1E-5875-476B-8F11-B6002428CA87}.Release|Win32.ActiveCfg = Release|Win32
+		{13510C1E-5875-476B-8F11-B6002428CA87}.Release|Win32.Build.0 = Release|Win32
+		{CBA89FD4-01AF-4A76-A476-645BCE5EBA5A}.Debug|Win32.ActiveCfg = Debug|Win32
+		{CBA89FD4-01AF-4A76-A476-645BCE5EBA5A}.Debug|Win32.Build.0 = Debug|Win32
+		{CBA89FD4-01AF-4A76-A476-645BCE5EBA5A}.Release|Win32.ActiveCfg = Release|Win32
+		{CBA89FD4-01AF-4A76-A476-645BCE5EBA5A}.Release|Win32.Build.0 = Release|Win32
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal
