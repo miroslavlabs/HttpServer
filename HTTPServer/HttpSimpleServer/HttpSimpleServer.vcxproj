@@ -76,11 +76,14 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="FileUtils.h" />
     <ClInclude Include="HTTPCommons.h" />
     <ClInclude Include="HTTPRequest.h" />
     <ClInclude Include="HTTPResponse.h" />
+    <ClInclude Include="SimpleServer.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="FileUtils.c" />
     <ClCompile Include="HTTPRequest.c" />
     <ClCompile Include="HTTPResponse.c" />
     <ClCompile Include="SimpleServer.c" />

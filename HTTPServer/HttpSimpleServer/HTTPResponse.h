@@ -6,11 +6,18 @@
 #include "HTTPRequest.h"
 #include <stdio.h>
 
+/*
+The structure contains the status of an HTTP response.
+*/
 typedef struct __status {
 	char *statusCode;
 	char *reasonPhrase;
 } Status;
 
+/*
+The strucure contains all of the supported statuses returned
+by the HTTP server.
+*/
 struct __status_codes_table {
 	// These bolong to the "Success" class;
 	Status OK;
@@ -25,6 +32,10 @@ struct __status_codes_table {
 	Status NotImplemented;
 } StatusCodesTable;
 
+/*
+The structure contains all of the parts of an HTTP response - 
+the HTTP version, status, response header section and response body.
+*/
 typedef struct __http_response {
 	char *httpVersion;
 	Status *status;
@@ -34,12 +45,10 @@ typedef struct __http_response {
 
 void initStatusCodes();
 
-char *provideFileContents(__in FILE *fp);
-
 int sendHttpResponse(__in HttpRequest *httpRequest,
 					 __in SOCKET *ClientSocket);
 
-char *createHttpResponseHeader(__in HttpResponse *httpResponse,
+char *createHttpResponseAsString(__in HttpResponse *httpResponse,
 							   __in HttpRequest *httpRequest,
 							   __out int *size);
 
