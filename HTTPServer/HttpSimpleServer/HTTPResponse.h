@@ -30,7 +30,7 @@ struct __status_codes_table {
 
 	// These belong to the "Server Error" class.
 	Status NotImplemented;
-} StatusCodesTable;
+}StatusCodesTable;
 
 /*
 The structure contains all of the parts of an HTTP response - 
@@ -45,31 +45,30 @@ typedef struct __http_response {
 
 void initStatusCodes();
 
-int sendHttpResponse(__in HttpRequest *httpRequest,
-					 __in SOCKET *ClientSocket);
+int sendHttpResponse(HttpRequest *httpRequest,
+					 SOCKET *ClientSocket);
 
-char *createHttpResponseAsString(__in HttpResponse *httpResponse,
-							   __in HttpRequest *httpRequest,
-							   __out int *size);
+char *createHttpResponseAsString(HttpResponse *httpResponse,
+							   HttpRequest *httpRequest,
+							   int *size);
 
-void createHttpResponseHeaderStatusLine(__in HttpResponse *httpResponse, 
-										__in HttpRequest *httpRequest, 
-										__in char *headbuf,
-										__out int *length);
+void createHttpResponseHeaderStatusLine(HttpResponse *httpResponse, 
+										HttpRequest *httpRequest, 
+										char *headbuf,
+										int *length);
 
-void provideUnknown(__in HttpRequest *httpRequest,
-				 __out HttpResponse *httpResponse);
+void provideUnknown(HttpRequest *httpRequest,
+				 HttpResponse *httpResponse);
 
-void provideHead(__in HttpRequest *httpRequest,
-				 __out HttpResponse *httpResponse);
+void provideHead(HttpRequest *httpRequest,
+				 HttpResponse *httpResponse);
 
-void provideGet(__in HttpRequest *httpRequest,
-				__out HttpResponse *httpResponse);
+void provideGet(HttpRequest *httpRequest,
+				HttpResponse *httpResponse);
 
-void providePost(__in HttpRequest *httpRequest,
-				 __out HttpResponse *httpResponse);
+void providePost(HttpRequest *httpRequest,
+				 HttpResponse *httpResponse);
 
-void provideOptions(__in HttpRequest *httpRequest,
-				 __out HttpResponse *httpResponse);
+void provideOptions(HttpResponse *httpResponse);
 
 #endif

@@ -17,11 +17,11 @@
 #pragma comment (lib, "Ws2_32.lib")
 
 #define MAX_BUFF_LEN 16384
-#define DEFAULT_PORT "8888"
-#define SLEEP_TIME 1000
+#define DEFAULT_PORT "80"
+#define WAIT_TIME_SEC 1
 
-int acquireHttpRequest(__in SOCKET ListenSocket,
-					   __in SOCKET ClientSocket,
-					   __out HttpRequest **httpRequest);
+int acquireHttpRequest(SOCKET ListenSocket,
+					   SOCKET ClientSocket,
+					   HttpRequest **httpRequest);
 
 #endif

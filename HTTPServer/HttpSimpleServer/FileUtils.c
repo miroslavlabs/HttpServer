@@ -10,7 +10,7 @@ must have been opened for reading.
 
 OUTPUT: A pointer to a char array where the file contents were copied.
 */
-char* provideFileContents(__in FILE *fp) {	
+char* provideFileContents(FILE *fp) {	
 	long file_size;
 	char *buffer;
 
@@ -44,7 +44,7 @@ INPUT: 'filename' contains the name of the file.
 
 OUTPUT: TRUE if the file exists and FALSE otherwise.
 */
-BOOL fileExists(__in const char *filename)
+BOOL fileExists(const char *filename)
 {
    FILE *fp = fopen (filename, "r");
    if (fp != NULL) fclose (fp);

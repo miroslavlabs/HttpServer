@@ -38,25 +38,25 @@ typedef struct __http_request {
 } HttpRequest;
 
 HttpRequest* parseHttpMessage(
-	__in char *msgbuf, 
-	__in int msglen);
+	char *msgbuf, 
+	int msglen);
 
 HttpRequestLine* parseHttpStatusLine(
-	__in char *msgbuf,
-	__in int msglen,
-	__out int *currentParsingPos);
+	char *msgbuf,
+	int msglen,
+	int *currentParsingPos);
 
 HttpHeaders* parseHttpHeaders(
-	__in char *msgbuf,
-	__in int msglen,
-	__out int *currentParsingPos);
+	char *msgbuf,
+	int msglen,
+	int *currentParsingPos);
 
 char* acquireSubstring(
-	__in char *buffer,
-	__in int start,
-	__in int end);
+	char *buffer,
+	int start,
+	int end);
 
 void freeHttpRequest(
-	__in HttpRequest *httpRequest);
+	HttpRequest *httpRequest);
 
 #endif

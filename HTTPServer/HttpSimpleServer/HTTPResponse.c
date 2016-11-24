@@ -1,6 +1,7 @@
 #include "HTTPResponse.h"
 #include <stdio.h>
 #include "FileUtils.h"
+#include <Windows.h>
 
 #define DEFAULT_BUFLEN 1024
 
@@ -46,8 +47,8 @@ a pointer to the client socket which will be used to send the response.
 
 OUTPUT: The exit code of the operation.
 */
-int sendHttpResponse(__in HttpRequest *httpRequest,
-					 __in SOCKET *ClientSocket) {
+int sendHttpResponse(HttpRequest *httpRequest,
+					 SOCKET *ClientSocket) {
 	HttpResponse httpResponse;
 	char *response_header = NULL, *response_body = NULL, *sendbuf = NULL;
 	int iSendResult, result;
@@ -79,7 +80,7 @@ int sendHttpResponse(__in HttpRequest *httpRequest,
 		} else if (httpRequest->requestLine->method == POST) {
 			providePost(httpRequest, &httpResponse);
 		} else if(httpRequest->requestLine->method == OPTIONS) {
-			provideOptions(httpRequest, &httpResponse);
+			provideOptions(&httpResponse);
 		}
 	}
 
@@ -90,7 +91,6 @@ int sendHttpResponse(__in HttpRequest *httpRequest,
 	if (iSendResult == SOCKET_ERROR) {
 		printf("send failed with error: %d\n", WSAGetLastError());
 		closesocket(*ClientSocket);
-		WSACleanup();
 		return EXIT_ERROR;
 	}
 
@@ -98,7 +98,7 @@ int sendHttpResponse(__in HttpRequest *httpRequest,
 	free(sendbuf);
 
 	// Free the response headers.
-	if(httpResponse.body != NULL) {
+	if(httpResponse.headers != NULL) {
 		free(httpResponse.headers);
 	}
 
@@ -114,11 +114,10 @@ of the response message.
 
 OUTPUT: A pointer to a char array, which contains the HTTP response message as a string.
 */
-char *createHttpResponseAsString(__in HttpResponse *httpResponse,
-							   __in HttpRequest *httpRequest,
-							   __out int *size) {
-	char *headbuf = NULL, *temp = NULL;
-	int templen;
+char *createHttpResponseAsString(HttpResponse *httpResponse,
+							   HttpRequest *httpRequest,
+							   int *size) {
+	char *headbuf = NULL;
 	
 	headbuf = (char *) malloc(DEFAULT_BUFLEN * sizeof(char));
 
@@ -126,18 +125,11 @@ char *createHttpResponseAsString(__in HttpResponse *httpResponse,
 	createHttpResponseHeaderStatusLine(httpResponse, httpRequest, headbuf, size);
 	// If no body exists for the response, do not create unnecessary headers.
 	if (httpResponse->body != NULL) {
-		sprintf(headbuf + *size, "Content-Type: %s;charset=%s\r\nContent-Length: %d\r\nConnection: close\r\n\r\n", 
-			httpResponse->headers->contentType, httpResponse->headers->charset, httpResponse->headers->contentLength);
+		sprintf(headbuf + *size, "Content-Type: %s;charset=%s\r\nContent-Length: %d\r\nConnection: close\r\n\r\n%s", 
+			httpResponse->headers->contentType, httpResponse->headers->charset, httpResponse->headers->contentLength, httpResponse->body);
 
 		// Copy the contents of the message body to the char array.
 		*size = strlen(headbuf);
-		templen = *size + httpResponse->headers->contentLength;
-		temp = (char*) malloc(templen*sizeof(char*));
-		memcpy(temp, headbuf, *size);
-		memcpy(temp + *size, httpResponse->body, httpResponse->headers->contentLength);
-		free(headbuf);
-		headbuf = temp;
-		*size = templen;
 	} else {
 		// Terminate the response message with CRLF.
 		headbuf[(*size)++] = CR;
@@ -156,10 +148,10 @@ INPUT: 'httpResponse' is the a pointer to the structurw which will contain the H
 will contain the parsed header information; 'length' will conatin the new length of the buffer
 after the parsing is complete.
 */
-void createHttpResponseHeaderStatusLine(__in HttpResponse *httpResponse, 
-										__in HttpRequest *httpRequest, 
-										__in char *headbuf,
-										__out int *length) {
+void createHttpResponseHeaderStatusLine(HttpResponse *httpResponse, 
+										HttpRequest *httpRequest, 
+										char *headbuf,
+										int *length) {
 	int headbuflen, itemLength;
 	headbuflen = 0;
 
@@ -198,8 +190,8 @@ This function creates an HttpResponse for an unsupported HTTP method.
 INPUT: 'httpRequest' is a pointer to an HttpRequest structure; 'httpResponse' is a
 pointer to an HttpResponse structure whose fields will be created accordingly.
 */
-void provideUnknown(__in HttpRequest *httpRequest,
-				 __out HttpResponse *httpResponse) {
+void provideUnknown(HttpRequest *httpRequest,
+				 HttpResponse *httpResponse) {
 	httpResponse->httpVersion = httpRequest->requestLine->httpVersion;
 	httpResponse->status = &StatusCodesTable.NotImplemented;
 }
@@ -210,15 +202,15 @@ This function creates an HttpResponse for an the HTTP HEAD method.
 INPUT: 'httpRequest' is a pointer to an HttpRequest structure; 'httpResponse' is a
 pointer to an HttpResponse structure whose fields will be created accordingly.
 */
-void provideHead(__in HttpRequest *httpRequest,
-				 __out HttpResponse *httpResponse) {
+void provideHead(HttpRequest *httpRequest,
+				 HttpResponse *httpResponse) {
 
 	FILE *fd = NULL;
 
 	httpResponse->httpVersion = httpRequest->requestLine->httpVersion;
 	
 	// Open the file for reading.
-	fd = fopen(httpRequest->requestLine->requestURI, "r");
+	fd = fopen(httpRequest->requestLine->requestURI, "rb");
 
 	// If the file cannot be open, then the resource doesn't exist.
 	if(!fd) {
@@ -236,8 +228,8 @@ void provideHead(__in HttpRequest *httpRequest,
 		Stick to the header information from the request or return default
 		information in case the specified headers were not set in the request.
 		*/
-		httpResponse->headers->contentType = httpRequest->headers->contentType == NULL ? "text/html" : httpRequest->headers->contentType;
-		httpResponse->headers->charset = httpRequest->headers->charset  == NULL ? "UTF-8" : httpRequest->headers->charset;
+		httpResponse->headers->contentType = httpRequest->headers->contentType == NULL ? (char*)"text/html" : httpRequest->headers->contentType;
+		httpResponse->headers->charset = httpRequest->headers->charset  == NULL ? (char*)"UTF-8" : httpRequest->headers->charset;
 
 		// Acquire the length of the file.
 		fseek(fd, 0L, SEEK_END);
@@ -255,8 +247,8 @@ This function creates an HttpResponse for an the HTTP GET method.
 INPUT: 'httpRequest' is a pointer to an HttpRequest structure; 'httpResponse' is a
 pointer to an HttpResponse structure whose fields will be created accordingly.
 */
-void provideGet(__in HttpRequest *httpRequest,
-				 __out HttpResponse *httpResponse) {
+void provideGet(HttpRequest *httpRequest,
+				 HttpResponse *httpResponse) {
 	FILE *fd = NULL;
 	// The GET method uses the same status line and headers created when responding to the HEAD method.
 	provideHead(httpRequest, httpResponse);
@@ -276,8 +268,8 @@ This function creates an HttpResponse for an the HTTP POST method.
 INPUT: 'httpRequest' is a pointer to an HttpRequest structure; 'httpResponse' is a
 pointer to an HttpResponse structure whose fields will be created accordingly.
 */
-void providePost(__in HttpRequest *httpRequest,
-				 __out HttpResponse *httpResponse) {
+void providePost(HttpRequest *httpRequest,
+				 HttpResponse *httpResponse) {
 	
 	FILE *fd = NULL;
     int result;
@@ -322,11 +314,10 @@ void providePost(__in HttpRequest *httpRequest,
 This function creates an HttpResponse for an the HTTP OPTIONS method.
 OPTIONS will return only the supported HTTP methods and supported MIME types.
 
-INPUT: 'httpRequest' is a pointer to an HttpRequest structure; 'httpResponse' is a
-pointer to an HttpResponse structure whose fields will be created accordingly.
+INPUT: 'httpResponse' is a pointer to an HttpResponse structure whose fields will
+be created accordingly.
 */
-void provideOptions(__in HttpRequest *httpRequest,
-				 __out HttpResponse *httpResponse) {
+void provideOptions(HttpResponse *httpResponse) {
 	httpResponse->status = &StatusCodesTable.OK;
 
 	// Specify the supported HTTP methods and supported MIME types.

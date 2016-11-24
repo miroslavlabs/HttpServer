@@ -4,8 +4,8 @@
 #include <Windows.h>
 #include <stdio.h>
 
-int fileExists(__in const char *filename);
+int fileExists(const char *filename);
 
-char *provideFileContents(__in FILE *fp);
+char *provideFileContents(FILE *fp);
 
 #endif

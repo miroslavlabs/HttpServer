@@ -14,8 +14,8 @@ OUTPUT: A pointer to an HttpRequest structre where the parsed message data
 is stored.
 */
 HttpRequest* parseHttpMessage(
-	__in char *msgbuf, 
-	__in int msglen) {
+	char *msgbuf, 
+	int msglen) {
 
 	HttpRequest *httpRequest;
 	int currentParsingPos;
@@ -53,9 +53,9 @@ OUTPUT: A pointer to an HttpRequestLine structre which contains the parsed
 status line information.
 */
 HttpRequestLine* parseHttpStatusLine(
-	__in char *msgbuf,
-	__in int msglen,
-	__out int *currentParsingPos) {
+	char *msgbuf,
+	int msglen,
+	int *currentParsingPos) {
 	
 	int i, lastPos, requestUriLen;
 	char *method  = NULL, *requestURI;
@@ -136,9 +136,9 @@ OUTPUT: A pointer to an HttpHeaders structre which contains the parsed
 headers data.
 */
 HttpHeaders* parseHttpHeaders(
-	__in char *msgbuf,
-	__in int msglen,
-	__out int *currentParsingPos) {
+	char *msgbuf,
+	int msglen,
+	int *currentParsingPos) {
 
 	char *fieldName = NULL, *headers = NULL;
 	int i, pos;
@@ -232,9 +232,9 @@ substring inside the char array; 'end' is the end position of the substring.
 OUTPUT: A pointer to the beggining of the substring char array.
 */
 char* acquireSubstring(
-	__in char *buffer,
-	__in int start,
-	__in int end) {
+	char *buffer,
+	int start,
+	int end) {
 	
 	int parsedItemLength;
 	char *substring;
@@ -255,7 +255,7 @@ INPUT: A pointer to the HttpRequest strucure, whose resources are to be
 deallocated.
 */
 void freeHttpRequest(
-	__in HttpRequest *httpRequest) {
+	HttpRequest *httpRequest) {
 	if(httpRequest->entityBody != NULL)
 		free(httpRequest->entityBody);
 

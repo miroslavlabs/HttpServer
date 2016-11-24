@@ -81,9 +81,11 @@ int main(void) {
 		}
 
 		if(acquireHttpRequest(ListenSocket, ClientSocket, &httpRequest) == EXIT_OK) {
-			sendHttpResponse(httpRequest, &ClientSocket);
-			freeHttpRequest(httpRequest);
-			free(httpRequest);
+			if(httpRequest != NULL) {
+				sendHttpResponse(httpRequest, &ClientSocket);
+				freeHttpRequest(httpRequest);
+				free(httpRequest);
+			}			
 		}
 
 		printf("Connection closing...\n");
@@ -117,9 +119,9 @@ stores the processed HTTP request.
 
 OUTPUT: The exit code of the operation.
 */
-int acquireHttpRequest(__in SOCKET ListenSocket,
-					   __in SOCKET ClientSocket,
-					   __out HttpRequest** httpRequest) {
+int acquireHttpRequest(SOCKET ListenSocket,
+					   SOCKET ClientSocket,
+					   HttpRequest** httpRequest) {
 	int iSendResult, iResult, msgLen, errorCode;
 	char recvbuf[DEFAULT_BUFLEN], msgbuf[MAX_BUFF_LEN];
 	int recvbuflen = DEFAULT_BUFLEN, msgbuflen = 0;
@@ -128,7 +130,7 @@ int acquireHttpRequest(__in SOCKET ListenSocket,
 	fd_set set;
 	struct timeval tm;
 	
-	tm.tv_sec = 2;
+	tm.tv_sec = WAIT_TIME_SEC;
 	tm.tv_usec = 0;
 
 	// The request structure is nullified in case no message is received.
@@ -155,6 +157,7 @@ int acquireHttpRequest(__in SOCKET ListenSocket,
 		if (ioctlsocket(ClientSocket,FIONREAD,&availableBytes) < 0) break;
 		printf("\npending = %ld\n", availableBytes);
 		if (availableBytes == 0) {
+			printf("nothing to do\n");
 			break;
 		}
 
