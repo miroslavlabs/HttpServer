@@ -52,7 +52,9 @@ char *createHttpResponseAsString(HttpResponse *httpResponse,
 							   HttpRequest *httpRequest,
 							   int *size);
 
-void createHttpResponseHeaderStatusLine(HttpResponse *httpResponse, 
+int calculateHttpRespnseLength(HttpResponse *httpResponse);
+
+void createHttpResponseStatusLine(HttpResponse *httpResponse, 
 										HttpRequest *httpRequest, 
 										char *headbuf,
 										int *length);

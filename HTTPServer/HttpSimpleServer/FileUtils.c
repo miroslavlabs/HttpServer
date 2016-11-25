@@ -23,15 +23,13 @@ char* provideFileContents(FILE *fp) {
 	rewind(fp);
 
 	// Allocate memory to store the entire file's contents.
-	buffer = (char*)calloc(file_size + 1, sizeof(char));
+	buffer = (char*)calloc(file_size, sizeof(char));
 	if(!buffer) {
 		return NULL;
 	}
 
 	// Copy the file into the bufffer.
-	fread(buffer , file_size, 1 , fp);
-
-	buffer[file_size] = '\0';
+	fread(buffer, 1, file_size, fp);
 
 	return buffer;
 }

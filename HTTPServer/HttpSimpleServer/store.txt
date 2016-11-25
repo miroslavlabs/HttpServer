@@ -1,3 +1,4 @@
 Adding sample body text.
 The file is acquired.
 Another line added.
+Testing with POST after adding image mime types.

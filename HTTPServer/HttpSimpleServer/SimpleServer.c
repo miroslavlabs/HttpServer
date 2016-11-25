@@ -14,8 +14,6 @@ int main(void) {
     struct addrinfo *result = NULL;
     struct addrinfo hints;
 
-    int iSendResult;
-    char recvbuf[DEFAULT_BUFLEN];
     int recvbuflen = DEFAULT_BUFLEN;
     
     // Initialize Winsock
@@ -122,7 +120,7 @@ OUTPUT: The exit code of the operation.
 int acquireHttpRequest(SOCKET ListenSocket,
 					   SOCKET ClientSocket,
 					   HttpRequest** httpRequest) {
-	int iSendResult, iResult, msgLen, errorCode;
+	int iSendResult, msgLen, errorCode;
 	char recvbuf[DEFAULT_BUFLEN], msgbuf[MAX_BUFF_LEN];
 	int recvbuflen = DEFAULT_BUFLEN, msgbuflen = 0;
 	BOOL dataRecieved = FALSE;

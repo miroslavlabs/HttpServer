@@ -3,8 +3,6 @@
 #include "FileUtils.h"
 #include <Windows.h>
 
-#define DEFAULT_BUFLEN 1024
-
 BOOL statusCodesInitialized = FALSE;
 
 /*
@@ -115,29 +113,99 @@ of the response message.
 OUTPUT: A pointer to a char array, which contains the HTTP response message as a string.
 */
 char *createHttpResponseAsString(HttpResponse *httpResponse,
-							   HttpRequest *httpRequest,
-							   int *size) {
+							     HttpRequest *httpRequest,
+							     int *size) {
 	char *headbuf = NULL;
+	int responseLen;
+
+	responseLen = calculateHttpRespnseLength(httpResponse);
 	
-	headbuf = (char *) malloc(DEFAULT_BUFLEN * sizeof(char));
+	headbuf = (char *) malloc((responseLen + 1) * sizeof(char));
 
 	// Create the status line of the response.
-	createHttpResponseHeaderStatusLine(httpResponse, httpRequest, headbuf, size);
+	createHttpResponseStatusLine(httpResponse, httpRequest, headbuf, size);
 	// If no body exists for the response, do not create unnecessary headers.
 	if (httpResponse->body != NULL) {
-		sprintf(headbuf + *size, "Content-Type: %s;charset=%s\r\nContent-Length: %d\r\nConnection: close\r\n\r\n%s", 
-			httpResponse->headers->contentType, httpResponse->headers->charset, httpResponse->headers->contentLength, httpResponse->body);
+		sprintf(headbuf + *size, "%s: %s;%s=%s\r\n%s: %d\r\n%s\r\n", 
+			CONTENT_TYPE, httpResponse->headers->contentType, CHARSET, httpResponse->headers->charset, 
+			CONTENT_LENGTH, httpResponse->headers->contentLength, CONNECTION_CLOSE);
 
 		// Copy the contents of the message body to the char array.
 		*size = strlen(headbuf);
+
+		//sprintf(headbuf + *size, "%s", httpResponse->body);
+		memcpy(headbuf + *size, httpResponse->body, httpResponse->headers->contentLength);
 	} else {
-		// Terminate the response message with CRLF.
-		headbuf[(*size)++] = CR;
-		headbuf[(*size)++] = LF;
-		headbuf[*size] = '\0';
+		sprintf(headbuf + *size, "%s\r\n", CONNECTION_CLOSE);
 	}
 
+	*size = responseLen;
+
 	return headbuf;
+}
+
+/*
+Calculates the length of the HTTP response.
+INPUT: The HttpResponse structure which contains the response message data.
+OUTPUT: The length of the HTTP message.
+*/
+int calculateHttpRespnseLength(HttpResponse *httpResponse) {
+	int totalLength, contentTypeLen, charsetLen, connectionClose, contentLengthLen, contentLengthTemp;
+	totalLength = 0;
+	contentTypeLen = 0;
+	charsetLen = 0;
+	contentLengthLen = 0;
+	/*
+	Calculating the length of the status line - add the length of each token and add one byte for each 
+	of the two spaces and 2 bytes for the CRLF at the end of the status line.
+	*/
+	totalLength += strlen(httpResponse->status->statusCode) + 
+		strlen(httpResponse->status->reasonPhrase) + strlen(httpResponse->httpVersion) + 2 + strlen(CRLF);
+
+	// When no body exists, the headers that describe the body are considered.
+	if (httpResponse->body != NULL) {
+		/*
+		The length of the Content-Type header is the length of the header's filed name, the length of the 
+		field value and two characters for the colon and space --> field-name: field-value
+		*/
+		contentTypeLen = strlen(CONTENT_TYPE) + strlen(httpResponse->headers->contentType) + 2;
+
+		/*
+		The idea here resembles the one from above. The length includes the semi-colon before the charset
+		directive and the equals sign after it and the actual value for the charset. The CRLF at the end of 
+		the line must also be accounted	for.
+		*/
+		charsetLen = strlen(CHARSET) + strlen(httpResponse->headers->charset) + 2 + strlen(CRLF);
+
+		/*
+		The content length field is a bit different - the number needs to be treated as a string and the
+		length of that string needs to be acquired.
+		*/
+		contentLengthLen = 0;
+		contentLengthTemp = httpResponse->headers->contentLength;
+		while(contentLengthTemp != 0) {
+			contentLengthTemp /= 10;
+			contentLengthLen++;
+		}
+
+		/*
+		Add the length of the field name and add two bytes for the colon and space characters
+		and the length of the CRLF delimiter.
+		*/
+		contentLengthLen += strlen(CONTENT_LENGTH) + 2 + strlen(CRLF);
+		
+		// Add the length of the body at the end.
+		totalLength += httpResponse->headers->contentLength;
+	}
+
+	// Get the lengh of the entrie header.
+	connectionClose = strlen(CONNECTION_CLOSE);
+
+	//When the header section is compelted, a CRLF delimiter must be placed at the end.
+	totalLength += contentTypeLen + charsetLen + contentLengthLen + 
+		connectionClose + strlen(CRLF);
+
+	return totalLength;
 }
 
 /*
@@ -148,13 +216,13 @@ INPUT: 'httpResponse' is the a pointer to the structurw which will contain the H
 will contain the parsed header information; 'length' will conatin the new length of the buffer
 after the parsing is complete.
 */
-void createHttpResponseHeaderStatusLine(HttpResponse *httpResponse, 
-										HttpRequest *httpRequest, 
-										char *headbuf,
-										int *length) {
+void createHttpResponseStatusLine(HttpResponse *httpResponse, 
+								  HttpRequest *httpRequest, 
+								  char *headbuf,
+								  int *length) {
 	int headbuflen, itemLength;
 	headbuflen = 0;
-
+	
 	//Add the HTTP version field.
 	itemLength = strlen(httpRequest->requestLine->httpVersion);
 	memcpy(headbuf, httpRequest->requestLine->httpVersion, itemLength);
@@ -178,10 +246,9 @@ void createHttpResponseHeaderStatusLine(HttpResponse *httpResponse,
 
 	// Terminate the status line with CRLF.
 	headbuf[headbuflen++] = CR;
-	headbuf[headbuflen++] = LF;
-	headbuf[headbuflen] = '\0';
+	headbuf[headbuflen] = LF;
 	
-	*length = headbuflen;
+	*length = headbuflen + 1;
 }
 
 /*
@@ -228,7 +295,7 @@ void provideHead(HttpRequest *httpRequest,
 		Stick to the header information from the request or return default
 		information in case the specified headers were not set in the request.
 		*/
-		httpResponse->headers->contentType = httpRequest->headers->contentType == NULL ? (char*)"text/html" : httpRequest->headers->contentType;
+		httpResponse->headers->contentType = getResourceContentType(httpRequest->requestLine->requestURI);
 		httpResponse->headers->charset = httpRequest->headers->charset  == NULL ? (char*)"UTF-8" : httpRequest->headers->charset;
 
 		// Acquire the length of the file.
@@ -254,7 +321,7 @@ void provideGet(HttpRequest *httpRequest,
 	provideHead(httpRequest, httpResponse);
 	// Acquire the file's contents and add them to the response.
 	if(httpResponse->status->statusCode != StatusCodesTable.NotFound.statusCode) {
-		fd = fopen(httpRequest->requestLine->requestURI, "r");
+		fd = fopen(httpRequest->requestLine->requestURI, "rb");
 		if (fd) {
 			httpResponse->body = provideFileContents(fd);
 			fclose(fd);
@@ -272,7 +339,6 @@ void providePost(HttpRequest *httpRequest,
 				 HttpResponse *httpResponse) {
 	
 	FILE *fd = NULL;
-    int result;
 	
 	/*
 	When POST is recieved, it is necessary to verify the the Content-Length header was
