@@ -88,7 +88,6 @@ int sendHttpResponse(HttpRequest *httpRequest,
 	iSendResult = send(*ClientSocket, sendbuf, sendbuf_size, 0);
 	if (iSendResult == SOCKET_ERROR) {
 		printf("send failed with error: %d\n", WSAGetLastError());
-		closesocket(*ClientSocket);
 		return EXIT_ERROR;
 	}
 
@@ -301,9 +300,7 @@ void provideHead(HttpRequest *httpRequest,
 		// Acquire the length of the file.
 		fseek(fd, 0L, SEEK_END);
 		httpResponse->headers->contentLength = ftell(fd);
-	}
-
-	if(fd) {
+		
 		fclose(fd);
 	}
 }

@@ -17,7 +17,7 @@
 #pragma comment (lib, "Ws2_32.lib")
 
 #define MAX_BUFF_LEN 16384
-#define DEFAULT_PORT "80"
+#define DEFAULT_PORT "8080"
 #define WAIT_TIME_SEC 1
 
 int acquireHttpRequest(SOCKET ListenSocket,
