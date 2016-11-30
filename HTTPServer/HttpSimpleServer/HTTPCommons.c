@@ -32,7 +32,7 @@ INPUT: The file path of the resource.
 OUTPUT: The corresponsing content type.
 */
 char *getResourceContentType(char *resource) {
-	char *fileExtension = NULL;
+	char *fileExtension = NULL, *mime = NULL;
 	int resourceNameLength, currentPos, extensionLength;
 	
 	resourceNameLength = strlen(resource);
@@ -45,8 +45,14 @@ char *getResourceContentType(char *resource) {
 
 	// Calcualte the length of the extension and acquire just the extension.
 	extensionLength = resourceNameLength - currentPos;
+
 	fileExtension = (char *) malloc((extensionLength + 1) * sizeof(char));
 	memcpy(fileExtension, resource + currentPos + 1, extensionLength);
 
-	return acquireMime(fileExtension);
+	mime = acquireMime(fileExtension);
+
+	// Free the temporary buffer.
+	free(fileExtension);
+
+	return mime;
 }

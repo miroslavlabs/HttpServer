@@ -30,7 +30,7 @@ int main(void) {
     hints.ai_flags = AI_PASSIVE;
 
     // Resolve the server address and port
-    iResult = getaddrinfo("127.0.0.1", DEFAULT_PORT, &hints, &result);
+    iResult = getaddrinfo(NODE_NAME, DEFAULT_PORT, &hints, &result);
     if ( iResult != 0 ) {
         printf("getaddrinfo failed with error: %d\n", iResult);
         WSACleanup();
@@ -58,17 +58,17 @@ int main(void) {
 
     freeaddrinfo(result);
 	
+	// Listen for requests.
+    iResult = listen(ListenSocket, SOMAXCONN);
+    if (iResult == SOCKET_ERROR) {
+        printf("listen failed with error: %d\n", WSAGetLastError());
+        closesocket(ListenSocket);
+        WSACleanup();
+        return EXIT_ERROR;
+    }
+
 	// Keep the server running.
 	while(1) {
-		// Listen for requests.
-		iResult = listen(ListenSocket, SOMAXCONN);
-		if (iResult == SOCKET_ERROR) {
-			printf("listen failed with error: %d\n", WSAGetLastError());
-			closesocket(ListenSocket);
-			WSACleanup();
-			return EXIT_ERROR;
-		}
-
 		// Accept a client socket
 		ClientSocket = accept(ListenSocket, NULL, NULL);
 		if (ClientSocket == INVALID_SOCKET) {
@@ -91,7 +91,6 @@ int main(void) {
 		if (iResult == SOCKET_ERROR) {
 			printf("shutdown failed with error: %d\n", WSAGetLastError());
 		}
-		closesocket(ClientSocket);
 	}
     
     // shutdown the connection since we're done
@@ -148,24 +147,15 @@ int acquireHttpRequest(SOCKET ListenSocket,
 	memset(&msgbuf, 0, MAX_BUFF_LEN);
 	msgbuflen = 0;
 	do {
-		// Check if the client socket has data pending for processing.		
-		if(select(0, &set, NULL, NULL, &tm) == SOCKET_ERROR) {
-			// If an error occured, acquired it and return immediately with the erro code.
-			errorCode = WSAGetLastError();				
-			printf("recv failed with error: %d\n", errorCode);
-			return errorCode;
-		}
-		
-		// If no data remains in the underlying buffer, move onto parsing the message.
-		if (ioctlsocket(ClientSocket,FIONREAD,&availableBytes) == SOCKET_ERROR) {
-			// If an error occured, acquired it and return immediately with the erro code.
-			errorCode = WSAGetLastError();				
-			printf("recv failed with error: %d\n", errorCode);
-			return errorCode;
-		}
+		// Check if the client socket has data pending for processing.
 
+		select(0, &set, NULL, NULL, &tm);
+		// FIXME - catch error
+		// If no data remains in the underlying buffer, move onto parsing the message.
+		if (ioctlsocket(ClientSocket,FIONREAD,&availableBytes) < 0) break;
 		printf("\npending = %ld\n", availableBytes);
 		if (availableBytes == 0) {
+			printf("nothing to do\n");
 			break;
 		}
 

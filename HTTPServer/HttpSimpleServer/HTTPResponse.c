@@ -61,7 +61,7 @@ int sendHttpResponse(HttpRequest *httpRequest,
 	// Initialize the HTTP response strucutre.
 	httpResponse.body = NULL;
 	httpResponse.headers = NULL;
-	httpResponse.httpVersion = NULL;
+	httpResponse.httpVersion = httpRequest->requestLine->httpVersion;
 	httpResponse.status = NULL;
 
 	/*
@@ -88,6 +88,7 @@ int sendHttpResponse(HttpRequest *httpRequest,
 	iSendResult = send(*ClientSocket, sendbuf, sendbuf_size, 0);
 	if (iSendResult == SOCKET_ERROR) {
 		printf("send failed with error: %d\n", WSAGetLastError());
+		closesocket(*ClientSocket);
 		return EXIT_ERROR;
 	}
 
@@ -115,9 +116,9 @@ char *createHttpResponseAsString(HttpResponse *httpResponse,
 							     HttpRequest *httpRequest,
 							     int *size) {
 	char *headbuf = NULL;
-	int responseLen;
+	int responseLen = 0;
 
-	responseLen = calculateHttpRespnseLength(httpResponse);
+	responseLen = calculateHttpRespnseLength(httpRequest, httpResponse);	
 	
 	headbuf = (char *) malloc((responseLen + 1) * sizeof(char));
 
@@ -132,8 +133,9 @@ char *createHttpResponseAsString(HttpResponse *httpResponse,
 		// Copy the contents of the message body to the char array.
 		*size = strlen(headbuf);
 
-		//sprintf(headbuf + *size, "%s", httpResponse->body);
-		memcpy(headbuf + *size, httpResponse->body, httpResponse->headers->contentLength);
+		if(httpResponse->body != EMPTY_STRING) {
+			memcpy(headbuf + *size, httpResponse->body, httpResponse->headers->contentLength);
+		}
 	} else {
 		sprintf(headbuf + *size, "%s\r\n", CONNECTION_CLOSE);
 	}
@@ -148,7 +150,8 @@ Calculates the length of the HTTP response.
 INPUT: The HttpResponse structure which contains the response message data.
 OUTPUT: The length of the HTTP message.
 */
-int calculateHttpRespnseLength(HttpResponse *httpResponse) {
+int calculateHttpRespnseLength(HttpRequest *httpRequest,
+							   HttpResponse *httpResponse) {
 	int totalLength, contentTypeLen, charsetLen, connectionClose, contentLengthLen, contentLengthTemp;
 	totalLength = 0;
 	contentTypeLen = 0;
@@ -193,8 +196,10 @@ int calculateHttpRespnseLength(HttpResponse *httpResponse) {
 		*/
 		contentLengthLen += strlen(CONTENT_LENGTH) + 2 + strlen(CRLF);
 		
-		// Add the length of the body at the end.
-		totalLength += httpResponse->headers->contentLength;
+		if(httpRequest->requestLine->method != HEAD) {
+			// Add the length of the body at the end.
+			totalLength += httpResponse->headers->contentLength;
+		}
 	}
 
 	// Get the lengh of the entrie header.
@@ -273,8 +278,6 @@ void provideHead(HttpRequest *httpRequest,
 
 	FILE *fd = NULL;
 
-	httpResponse->httpVersion = httpRequest->requestLine->httpVersion;
-	
 	// Open the file for reading.
 	fd = fopen(httpRequest->requestLine->requestURI, "rb");
 
@@ -345,16 +348,6 @@ void providePost(HttpRequest *httpRequest,
 	if(httpRequest->headers->contentLength == ZERO_CONTENT_LENGTH) {
 		httpResponse->status = &StatusCodesTable.NoContent;
 	
-	} else if(httpRequest->headers->contentLength == MISSING_CONTENT_LENGTH) {
-		httpResponse->status = &StatusCodesTable.BadRequest;
-	
-	} else if(httpRequest->headers->contentType == NULL) {
-		/*
-		If the content type is missing, the server cannot return the
-		data in a format that will be understood by the client.
-		*/
-		httpResponse->status = &StatusCodesTable.BadRequest;
-	
 	} else {
 		/*
 		If the file resource exsits, append the contents of the HTTP request body to the
@@ -385,7 +378,7 @@ void provideOptions(HttpResponse *httpResponse) {
 
 	// Specify the supported HTTP methods and supported MIME types.
 	httpResponse->body = "This server supports the following methods: HEAD, GET, PUT, OPTIONS.\n" \
-		"The following MIME types are supported: text/html, text/plain";
+		"The following MIME types are supported: text/html, text/plain, img/jpeg, img/jpg, img/gif, img/png";
 
 	// Specify the body's length and MIME type.
 	httpResponse->headers = (HttpHeaders *) malloc(sizeof(HttpHeaders));
